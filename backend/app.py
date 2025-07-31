@@ -1,14 +1,22 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
 import hmac
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse, quote
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI(title="Golf API", description="API for golf course data", version="1.0.0")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # GolfBert API configuration
 API_BASE_URL = "https://api.golfbert.com/v1"
@@ -27,7 +35,7 @@ def create_aws_signature(method, url, headers=None, payload=''):
     query = parsed_url.query or ''
     
     # Create timestamp
-    timestamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     date = timestamp[:8]
     
     # Create canonical headers (must be sorted)
@@ -78,42 +86,43 @@ def make_api_request(endpoint):
         print(f"API request failed: {e}")
         return None
 
-@app.route('/api/courses/<int:course_id>/holes')
-def get_course_holes(course_id):
+@app.get("/api/courses/{course_id}/holes")
+async def get_course_holes(course_id: int):
     """Get all holes for a specific course"""
     data = make_api_request(f"/courses/{course_id}/holes")
     if data:
-        return jsonify(data)
+        return data
     else:
-        return jsonify({"error": "Failed to fetch course holes"}), 500
+        raise HTTPException(status_code=500, detail="Failed to fetch course holes")
 
-@app.route('/api/holes/<int:hole_id>/polygons')
-def get_hole_polygons(hole_id):
+@app.get("/api/holes/{hole_id}/polygons")
+async def get_hole_polygons(hole_id: int):
     """Get polygon data for a specific hole"""
     data = make_api_request(f"/holes/{hole_id}/polygons")
     if data:
-        return jsonify(data)
+        return data
     else:
-        return jsonify({"error": "Failed to fetch hole polygons"}), 500
+        raise HTTPException(status_code=500, detail="Failed to fetch hole polygons")
 
-@app.route('/api/test')
-def test_api():
+@app.get("/api/test")
+async def test_api():
     """Test endpoint to verify API connectivity"""
     # Test with the example course ID from your sample
     data = make_api_request("/courses/4803/holes")
     if data:
-        return jsonify({"status": "success", "sample_data": data})
+        return {"status": "success", "sample_data": data}
     else:
-        return jsonify({"status": "error", "message": "API connection failed"}), 500
+        raise HTTPException(status_code=500, detail="API connection failed")
 
-@app.route('/api/config')
-def get_config():
+@app.get("/api/config")
+async def get_config():
     """Get API configuration status"""
-    return jsonify({
+    return {
         "api_key_set": bool(API_KEY),
         "access_key_set": bool(ACCESS_KEY),
         "secret_key_set": bool(SECRET_KEY)
-    })
+    }
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=8000, reload=True)
