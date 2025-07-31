@@ -11,7 +11,7 @@ class TestApp:
         """Test the /api/config endpoint."""
         response = client.get('/api/config')
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert 'api_key_set' in data
         assert 'access_key_set' in data
         assert 'secret_key_set' in data
@@ -26,7 +26,7 @@ class TestApp:
              patch('app.SECRET_KEY', None):
             response = client.get('/api/config')
             assert response.status_code == 200
-            data = json.loads(response.data)
+            data = response.json()
             assert data['api_key_set'] is False
             assert data['access_key_set'] is False
             assert data['secret_key_set'] is False
@@ -38,7 +38,7 @@ class TestApp:
         
         response = client.get('/api/courses/4803/holes')
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert 'resources' in data
         assert len(data['resources']) == 1
         assert data['resources'][0]['id'] == 25506
@@ -50,8 +50,8 @@ class TestApp:
         
         response = client.get('/api/courses/4803/holes')
         assert response.status_code == 500
-        data = json.loads(response.data)
-        assert 'error' in data
+        data = response.json()
+        assert 'detail' in data
 
     @patch('app.make_api_request')
     def test_get_polygons_success(self, mock_request, client, mock_env_vars, sample_polygons_response):
@@ -60,7 +60,7 @@ class TestApp:
         
         response = client.get('/api/holes/25506/polygons')
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert 'resources' in data
         assert len(data['resources']) == 1
         assert data['resources'][0]['surfacetype'] == 'Green'
@@ -72,13 +72,15 @@ class TestApp:
         
         response = client.get('/api/holes/25506/polygons')
         assert response.status_code == 500
-        data = json.loads(response.data)
-        assert 'error' in data
+        data = response.json()
+        assert 'detail' in data
 
     def test_cors_headers(self, client):
         """Test CORS headers are present."""
-        response = client.get('/api/config')
-        assert 'Access-Control-Allow-Origin' in response.headers
+        # FastAPI CORS middleware adds headers for cross-origin requests
+        # Test with Origin header to trigger CORS
+        response = client.get('/api/config', headers={'Origin': 'http://localhost:3000'})
+        assert 'access-control-allow-origin' in response.headers
 
     def test_invalid_endpoint(self, client):
         """Test invalid endpoint returns 404."""
@@ -92,7 +94,7 @@ class TestApp:
         
         response = client.get('/api/test')
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data['status'] == 'success'
         assert 'sample_data' in data
 
@@ -103,8 +105,8 @@ class TestApp:
         
         response = client.get('/api/test')
         assert response.status_code == 500
-        data = json.loads(response.data)
-        assert data['status'] == 'error'
+        data = response.json()
+        assert 'detail' in data
 
 
 class TestAWSSignature:
@@ -196,11 +198,15 @@ class TestEdgeCases:
         
         response = client.get('/api/courses/4803/holes')
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data == {"test": "data"}
 
     def test_options_request(self, client):
         """Test OPTIONS request for CORS preflight."""
-        response = client.options('/api/config')
+        # FastAPI CORS middleware handles OPTIONS requests for preflight
+        response = client.options('/api/config', headers={
+            'Origin': 'http://localhost:3000',
+            'Access-Control-Request-Method': 'GET'
+        })
         assert response.status_code == 200
-        assert 'Access-Control-Allow-Origin' in response.headers
+        assert 'access-control-allow-origin' in response.headers

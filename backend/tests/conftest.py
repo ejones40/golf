@@ -1,14 +1,13 @@
 import pytest
 import os
 from unittest.mock import patch
+from fastapi.testclient import TestClient
 from app import app
 
 @pytest.fixture
 def client():
-    """Create a test client for the Flask app."""
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    """Create a test client for the FastAPI app."""
+    return TestClient(app)
 
 @pytest.fixture
 def mock_env_vars():
